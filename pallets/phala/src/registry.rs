@@ -101,6 +101,10 @@ pub mod pallet {
 	#[pallet::getter(fn pruntime_allowlist)]
 	pub type PRuntimeAllowList<T: Config> = StorageValue<_, Vec<Vec<u8>>, ValueQuery>;
 
+	/// The effecitve height of pRuntime binary
+	#[pallet::storage]
+	pub type PRuntimeTimestamp<T: Config> = StorageMap<_, Twox64Concat, Vec<u8>, T::BlockNumber>;
+
 	/// Allow list of relaychain genesis
 	///
 	/// Only genesis within the list can do register.
@@ -346,8 +350,11 @@ pub mod pallet {
 				Error::<T>::PRuntimeAlreadyExists
 			);
 
-			allowlist.push(pruntime_hash);
+			allowlist.push(pruntime_hash.clone());
 			PRuntimeAllowList::<T>::put(allowlist);
+
+			let now = frame_system::Pallet::<T>::block_number();
+			PRuntimeTimestamp::<T>::insert(&pruntime_hash, &now);
 
 			Ok(())
 		}
@@ -367,6 +374,8 @@ pub mod pallet {
 				.filter(|h| *h != pruntime_hash)
 				.collect();
 			PRuntimeAllowList::<T>::put(filtered);
+
+			PRuntimeTimestamp::<T>::remove(&pruntime_hash);
 
 			Ok(())
 		}
@@ -736,6 +745,7 @@ pub mod pallet {
 					Error::<Test>::PRuntimeAlreadyExists
 				);
 				assert_eq!(PRuntimeAllowList::<Test>::get().len(), 1);
+				assert!(PRuntimeTimestamp::<Test>::contains_key(&sample));
 				assert_ok!(PhalaRegistry::remove_pruntime(
 					Origin::root(),
 					sample.clone()
@@ -745,6 +755,7 @@ pub mod pallet {
 					Error::<Test>::PRuntimeNotFound
 				);
 				assert_eq!(PRuntimeAllowList::<Test>::get().len(), 0);
+				assert!(!PRuntimeTimestamp::<Test>::contains_key(&sample));
 			});
 		}
 
